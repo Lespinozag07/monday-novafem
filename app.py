@@ -113,8 +113,7 @@ def create_item_in_monday(item_data, nh):
                 id
             }}
         }}
-        '''
-    }
+        '''}
 
     response = requests.post(MONDAY_URL, headers=headers, json=query)
     if response.status_code == 200:
