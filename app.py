@@ -130,42 +130,43 @@ def create_item_in_monday(item_data, nh):
 def webhook_handler():
     #Maneja el webhook enviado por Monday.com.
     data = request.json
-    item_id = data.get("event", {}).get("pulseId")  # ID del elemento
-    board_id = data.get("event", {}).get("boardId")  # ID del tablero
 
-    if not item_id or not board_id:
-        return jsonify({"error": "No se proporcionaron IDs válidos"}), 400
+    #validar si es el challenge o un pulso
+    if data.find("Challenge"):
+        if request.method == 'POST':
+            data = request.get_json()
+            challenge = data['challenge']
+            
+            return jsonify({'challenge': challenge})
 
-    print(f"Webhook recibido: Item ID: {item_id}, Board ID: {board_id}")
+            # print(request.json)
+            # return 'success', 200
+        else:
+            abort(400)
+    else:            
+        item_id = data.get("event", {}).get("pulseId")  # ID del elemento
+        board_id = data.get("event", {}).get("boardId")  # ID del tablero
 
-    # Obtener el valor de nh desde Monday
-    nh = get_nh_from_monday(item_id)
-    if not nh:
-        return jsonify({"error": "No se pudo obtener el valor de nh"}), 400
+        if not item_id or not board_id:
+            return jsonify({"error": "No se proporcionaron IDs válidos"}), 400
 
-    # Consultar el API externo
-    external_data = get_external_data(nh)
-    if not external_data:
-        return jsonify({"error": "No se obtuvieron datos del API externo"}), 400
+        print(f"Webhook recibido: Item ID: {item_id}, Board ID: {board_id}")
 
-    # Crear items en el tablero con los datos obtenidos
-    for item in external_data:
-        create_item_in_monday(item, nh)
+        # Obtener el valor de nh desde Monday
+        nh = get_nh_from_monday(item_id)
+        if not nh:
+            return jsonify({"error": "No se pudo obtener el valor de nh"}), 400
 
-    return jsonify({"message": "Integración completada con éxito"}), 200
+        # Consultar el API externo
+        external_data = get_external_data(nh)
+        if not external_data:
+            return jsonify({"error": "No se obtuvieron datos del API externo"}), 400
 
-@app.route("/", methods=["POST"])
-def webhook():
-    if request.method == 'POST':
-        data = request.get_json()
-        challenge = data['challenge']
-        
-        return jsonify({'challenge': challenge})
+        # Crear items en el tablero con los datos obtenidos
+        for item in external_data:
+            create_item_in_monday(item, nh)
 
-        # print(request.json)
-        # return 'success', 200
-    else:
-        abort(400)
+        return jsonify({"message": "Integración completada con éxito"}), 200
 
 if __name__ == "__main__":
     app.run(port=3690, debug=True)
