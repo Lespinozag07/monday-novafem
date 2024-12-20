@@ -1,4 +1,4 @@
-from flask import Flask, request,abort, jsonify
+from flask import Flask, request, jsonify
 import requests
 import json
 
@@ -153,19 +153,6 @@ def webhook_handler():
         create_item_in_monday(item, nh)
 
     return jsonify({"message": "Integración completada con éxito"}), 200
-
-@app.route("/", methods=["POST"])
-def webhook():
-    if request.method == 'POST':
-        data = request.get_json()
-        challenge = data['challenge']
-        
-        return jsonify({'challenge': challenge})
-
-        # print(request.json)
-        # return 'success', 200
-    else:
-        abort(400)
 
 if __name__ == "__main__":
     app.run(port=3690, debug=True)
