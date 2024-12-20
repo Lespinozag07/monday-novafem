@@ -132,7 +132,7 @@ def webhook_handler():
     data = request.json
 
     #validar si es el challenge o un pulso
-    if data.find("Challenge"):
+    if data.find("challenge"):
         if request.method == 'POST':
             data = request.get_json()
             challenge = data['challenge']
