@@ -101,19 +101,23 @@ def create_item_in_monday(item_data, nh):
         "texto_mkkbc2cz": nh
         #"texto_mkkbsc4y": NombrePaciente #NombrePaciente
     }
-
+    backslash_char = "\\"
+    columnValues = json.dumps(column_values).replace('"', '\\"')
+    #column_values: "{json.dumps(column_values).replace('"', '\\"')}"
+    
     query = {
         "query": f'''
         mutation {{
             create_item(
                 board_id: {CITAS_BOARD_ID},
                 item_name: "Cita ID: {item_data["id"]}",
-                column_values: "{json.dumps(column_values).replace('"', '\\"')}"
+                column_values: "{columnValues}"
             ) {{
                 id
             }}
         }}
-        '''}
+        '''
+    }
 
     response = requests.post(MONDAY_URL, headers=headers, json=query)
     if response.status_code == 200:
