@@ -24,7 +24,7 @@ def get_nh_from_monday(item_id):
         "Authorization": MONDAY_API_KEY,
         "Content-Type": "application/json"
     }
-
+    #consulta GraphQL para obtener las columnas del Item mediante el item_recibido en el pulso
     query = {
         "query": f'''
         query {{
@@ -105,6 +105,7 @@ def create_item_in_monday(item_data, nh):
     columnValues = json.dumps(column_values).replace('"', '\\"')
     #column_values: "{json.dumps(column_values).replace('"', '\\"')}"
     
+    #Mutacion para realizar la operacion de creacion de items en el tablero especificado
     query = {
         "query": f'''
         mutation {{
@@ -125,7 +126,8 @@ def create_item_in_monday(item_data, nh):
     else:
         print(f"Error al crear el item en Monday.com: {response.status_code}")
         print(response.text)
-
+        
+#Metodo para escuchar el webHook, gestionar el challenge y procesar el pulso recibido a traves del servicio
 @app.route("/webhook", methods=["POST"])
 def webhook_handler():
     #Maneja el webhook enviado por Monday.com.
@@ -152,17 +154,19 @@ def webhook_handler():
 
         print(f"Webhook recibido: Item ID: {item_id}, Board ID: {board_id}")
 
-        # Obtener el valor de nh desde Monday
+        # 1) Obtener el valor de nh desde Monday
         nh = get_nh_from_monday(item_id)
         if not nh:
             return jsonify({"error": "No se pudo obtener el valor de nh"}), 400
 
+        # 2) Una vez identificado el nh se obtienen los datos que necesitan ser enviados hacia Monday.com
         # Consultar el API externo
         external_data = get_external_data(nh)
         if not external_data:
             return jsonify({"error": "No se obtuvieron datos del API externo"}), 400
 
-        # Crear items en el tablero con los datos obtenidos
+        # 3) Una vez obtenido los datos desde el API o BD
+        # Crear items en los tableros de Monday.com
         for item in external_data:
             create_item_in_monday(item, nh)
 
