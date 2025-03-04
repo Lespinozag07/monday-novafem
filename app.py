@@ -174,7 +174,7 @@ def create_item_in_monday(item_data, CodIP):
     columnValues = json.dumps(column_values).replace('"', '\\"')
     #column_values: "{json.dumps(column_values).replace('"', '\\"')}"
     
-    #Mutacion para realizar la operacion de creacion de items en el tablero especificado
+    #Mutacion para realizar la operacion de creacion de items en el tablero especificad
     query = {
         "query": f'''
         mutation {{
