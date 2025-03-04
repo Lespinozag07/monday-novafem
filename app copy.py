@@ -119,43 +119,32 @@ def get_muestras_paciente(CodIP):
         return None        
 #4- validar si existe o no el elemento (devuelve boolean)
 def item_exists_in_monday(item_name):
-    # Verifica si un item con el mismo ID de cita ya existe en el tablero (sin límite de 100)
+    # Verifica si un item con el mismo ID de cita ya existe en el tablero
     headers = {
         "Authorization": MONDAY_API_KEY,
         "Content-Type": "application/json"
     }
-    items = []
-    cursor = None
-    
-    while True:
-        query = {
-            "query": f'''
-            query {{
-                boards(ids: {CITAS_BOARD_ID}) {{
-                    items_page(limit: 100, cursor: {json.dumps(cursor) if cursor else "null"}) {{
-                        cursor
-                        items {{
-                            id
-                            name
-                        }}
+    query = {
+        "query": f'''
+        query {{
+            boards(ids: {CITAS_BOARD_ID}) {{
+                items_page(limit: 100) {{
+                    items {{
+                        id
+                        name
                     }}
                 }}
             }}
-            '''
-        }
-        response = requests.post(MONDAY_URL, headers=headers, json=query)
-        
-        if response.status_code == 200:
-            data = response.json()
-            items.extend(data["data"]["boards"][0]["items_page"]["items"])
-            cursor = data["data"]["boards"][0]["items_page"].get("cursor")
-            if not cursor:
-                break  # No hay más páginas, terminamos
-        else:
-            return False  # Error en la consulta, asumimos que no existe
+        }}
+        '''
+    }
+    response = requests.post(MONDAY_URL, headers=headers, json=query)
     
-    return any(item["name"] == item_name for item in items)
-
+    if response.status_code == 200:
+        data = response.json()
+        items = data["data"]["boards"][0]["items_page"]["items"]
+        return any(item["name"] == item_name for item in items)
+    return False
 #5- Si no existe crear el item en el tablero de CitasPaciente
 def create_item_in_monday(item_data, CodIP):
     # Crea un item en Monday.com solo si no existe
