@@ -13,12 +13,15 @@ EXTERNAL_API_URL = "https://test-apiwarden.portalns.es/api/monday/citasPaciente"
 MONDAY_BOARD_ID = "8079345425";
 #Id del tablero citasPaciente
 CITAS_BOARD_ID = "8078247682";
+#Id del tablero manejo reservas de banco
+RESERVAS_BOARD_ID = "7201635321";
 NHPaciente = '';
+CodIpPaciente = '';
 NombrePaciente = '';
 
-def get_nh_from_monday(item_id): 
-    print(f"Entrando a obtener el nh para el item: {item_id},")
-    #Obtiene el valor de 'nh' desde un tablero de Monday.com. , item_id representa el id del elemento 
+def get_codip_from_monday(item_id): 
+    print(f"Entrando a obtener el CodIP para el item: {item_id},")
+    #Obtiene el valor de 'CodIP' desde un tablero de Monday.com. , item_id representa el id del elemento 
     #Item dentro del tablero recibido desde el pulse del webhook
     headers = {
         "Authorization": MONDAY_API_KEY,
@@ -29,6 +32,7 @@ def get_nh_from_monday(item_id):
         "query": f'''
         query {{
             items(ids:[ {item_id}]) {{
+                id, name,
                 column_values {{
                     id
                     text
@@ -42,26 +46,33 @@ def get_nh_from_monday(item_id):
 
     if response.status_code == 200:
         data = response.json()
-        # Busca el valor del parámetro 'nh' en las columnas del elemento
+        # Busca el valor del parámetro 'CodIP' en las columnas del elemento, 
         for column in data["data"]["items"][0]["column_values"]:
-            #if column["id"] == "texto_mkkbaxzb": #Reemplaza 'nh' por el ID real de la columna ---> texto_mkkbaxzb
-            if column["id"] == "texto_mkkbaxzb":  # Reemplaza 'nh' por el ID real de la columna ---> texto_mkkbaxzb
+            if column["id"] == "texto_mkkbaxzb": 
                 NHPaciente = column["text"]
                 print(f"El NH es:"+ NHPaciente)
-                return column["text"]
+                #return column["text"]
+            #if column["id"] == "texto_mkkbaxzb": 
+                #NombrePaciente = column["text"]
+                #print(f"El IP es:"+ NHPaciente)
+                #return column["text"]                
+            if column["id"] == "codigo_ip__1": 
+                CodIpPaciente = column["text"]
+                print(f"El CodIP es:"+ CodIpPaciente)
+                return column["text"]                
         return None
     else:
         print(f"Error al consultar Monday: {response.status_code}")
         return None
 
-def get_external_data(nh):
-    #Consulta el API externo con el valor de 'nh'.
+def get_citas_paciente(CodIP):
+    #Consulta citas paciente con el valor de 'CodIP'.
     try:
         # URL del API externo
         external_api_url = "https://test-apiwarden.portalns.es/api/monday/citasPaciente"
 
         # Parámetros y autenticación
-        params = {'nh': nh}
+        params = {'nh': CodIP}
         auth = ('novafem', 'monday')  # Username y Password
 
         # Realizar la solicitud GET con autenticación
@@ -80,8 +91,66 @@ def get_external_data(nh):
         print(f"Error al conectarse al API externo: {e}")
         return None
 
-def create_item_in_monday(item_data, nh):
-    #Crea un elemento (item) en un tablero de Monday.com.
+def get_muestras_paciente(CodIP):
+    #Consulta muestras de banco del paciente con el valor de 'CodIP'.
+    try:
+        # URL del API externo
+        external_api_url = "https://test-apiwarden.portalns.es/api/monday/muestrasPaciente"
+
+        # Parámetros y autenticación
+        params = {'nh': CodIP}
+        auth = ('novafem', 'monday')  # Username y Password
+
+        # Realizar la solicitud GET con autenticación
+        response = requests.get(external_api_url, params=params, auth=auth)
+
+        # Manejo de errores en la respuesta
+        response.raise_for_status()  # Lanza una excepción para códigos de error HTTP
+
+        if response.status_code == 200:
+            return response.json()
+        else:
+            print(f"Error al consultar el API externo: {response.status_code}")
+            print(response.text)
+            return None
+    except requests.exceptions.RequestException as e:
+        print(f"Error al conectarse al API externo: {e}")
+        return None        
+
+def item_exists_in_monday(item_name):
+    # Verifica si un item con el mismo ID de cita ya existe en el tablero
+    headers = {
+        "Authorization": MONDAY_API_KEY,
+        "Content-Type": "application/json"
+    }
+    query = {
+        "query": f'''
+        query {{
+            boards(ids: {CITAS_BOARD_ID}) {{
+                items_page(limit: 100) {{
+                    items {{
+                        id
+                        name
+                    }}
+                }}
+            }}
+        }}
+        '''
+    }
+    response = requests.post(MONDAY_URL, headers=headers, json=query)
+    
+    if response.status_code == 200:
+        data = response.json()
+        items = data["data"]["boards"][0]["items_page"]["items"]
+        return any(item["name"] == item_name for item in items)
+    return False
+
+def create_item_in_monday(item_data, CodIP):
+    # Crea un item en Monday.com solo si no existe
+    if item_exists_in_monday(str(item_data.get("id", ""))):
+        print(f"El item {item_data.get('id')} ya existe en Monday.com, no se creará nuevamente.")
+        return
+        
     headers = {
         "Authorization": MONDAY_API_KEY,
         "Content-Type": "application/json"
@@ -98,7 +167,7 @@ def create_item_in_monday(item_data, nh):
         "texto_mkkbd68h": item_data.get("hora", ""),#hora_cita
         "texto_mkkbhz9d": item_data.get("estados_citas", ""),#estados_citas
         "texto_mkkbqmst": item_data.get("estados_citas.name", ""),#estados_citas.name
-        "texto_mkkbc2cz": nh
+        "texto_mkkbc2cz": CodIP
         #"texto_mkkbsc4y": NombrePaciente #NombrePaciente
     }
     backslash_char = "\\"
@@ -111,7 +180,7 @@ def create_item_in_monday(item_data, nh):
         mutation {{
             create_item(
                 board_id: {CITAS_BOARD_ID},
-                item_name: "Cita ID: {item_data["id"]}",
+                item_name: "{item_data["id"]}",
                 column_values: "{columnValues}"
             ) {{
                 id
@@ -137,10 +206,8 @@ def webhook_handler():
     if "challenge" in data:
         if request.method == 'POST':
             #data = request.get_json()
-            challenge = data['challenge']
-            
+            challenge = data['challenge']            
             return jsonify({'challenge': challenge})
-
             # print(request.json)
             # return 'success', 200
         else:
@@ -154,21 +221,28 @@ def webhook_handler():
 
         print(f"Webhook recibido: Item ID: {item_id}, Board ID: {board_id}")
 
-        # 1) Obtener el valor de nh desde Monday
-        nh = get_nh_from_monday(item_id)
-        if not nh:
-            return jsonify({"error": "No se pudo obtener el valor de nh"}), 400
+        # 1) Obtener el valor de Codigo IP desde Monday
+        CodIP = get_codip_from_monday(item_id)
+        if not CodIP:
+            return jsonify({"error": "No se pudo obtener el valor de CodIP"}), 400
 
-        # 2) Una vez identificado el nh se obtienen los datos que necesitan ser enviados hacia Monday.com
-        # Consultar el API externo
-        external_data = get_external_data(nh)
-        if not external_data:
-            return jsonify({"error": "No se obtuvieron datos del API externo"}), 400
+        # 2) Una vez identificado el CodIP se obtienen los datos que necesitan ser enviados hacia Monday.com
+        # Consultar citas paciente
+        citas_paciente = get_citas_paciente(CodIP)
+        if not citas_paciente:
+            return jsonify({"error": "No se obtuvieron citas del paciente"}), 400
+        # Consultar muestras paciente
+        muestras_paciente = get_muestras_paciente(CodIP)
+        if not muestras_paciente:
+            return jsonify({"error": "No se obtuvieron muestras del paciente"}), 400            
 
         # 3) Una vez obtenido los datos desde el API o BD
-        # Crear items en los tableros de Monday.com
-        for item in external_data:
-            create_item_in_monday(item, nh)
+        # Por cada elemento recibido de Citas paciente, se debe validar si existe o no el elemento
+        # Si no existe m crear el item en el tablero de CitasPaciente
+        for item in citas_paciente:
+            #aqui deberia ir la logica que consulta al api de monday y determine si existe o no, 
+            #sino existe invocar al siguiente metodo
+            create_item_in_monday(item, CodIP)
 
         return jsonify({"message": "Integración completada con éxito"}), 200
 
