@@ -52,14 +52,20 @@ def get_codip_from_monday(item_id):
             "CodIP": None,
             "NombrePaciente": item_data["name"]  # Obtener el valor del Name del item
         }
+        
+        NombrePaciente = item_data["name"]  # Obtener el valor del Name del item      
+        print(f"El IP es:"+ NombrePaciente)
 
-        for column in item_data["column_values"]:
-            if column["id"] == "codigo_ip__1": 
-                item_info["CodIP"] = column["text"]
+        # Busca el valor del parámetro 'CodIP' en las columnas del elemento, 
+        for column in data["data"]["items"][0]["column_values"]:
             if column["id"] == "texto_mkkbaxzb": 
-                item_info["NHPaciente"] = column["text"]
-                #print(f"El NH es:"+ NHPaciente)              
-        return item_info
+                NHPaciente = column["text"]
+                print(f"El NH es:"+ NHPaciente)            
+            if column["id"] == "codigo_ip__1": 
+                CodIpPaciente = column["text"]
+                print(f"El CodIP es:"+ CodIpPaciente)
+                return column["text"]                
+        return None
     else:
         print(f"Error al consultar Monday: {response.status_code}")
         return None
@@ -92,7 +98,7 @@ def get_citas_paciente(CodIP):
         print(f"Error al conectarse al API externo: {e}")
         return None
 
-#3- Consultar muestras paciente
+#3- Consultar citas paciente
 def get_muestras_paciente(CodIP):
     print(f"Entrando en get_muestras_paciente")
     #Consulta muestras de banco del paciente con el valor de 'CodIP'.
@@ -161,7 +167,7 @@ def item_exists_in_monday(item_name):
     return any(item["name"] == item_name for item in items)
 
 #5- Si no existe crear el item en el tablero de CitasPaciente
-def create_item_in_monday(item_data, CodIP, NombrePaciente):
+def create_item_in_monday(item_data, CodIP):
     print(f"Entrando en create_item_in_monday")
     # Crea un item en Monday.com solo si no existe
     if item_exists_in_monday(str(item_data.get("id", ""))):
@@ -220,15 +226,15 @@ def update_item_status(item_id):
         "Authorization": MONDAY_API_KEY,
         "Content-Type": "application/json"
     }
-    #column_values = json.dumps({"estado_1_mkkbqk95": {"label": "Finalizado"}}).replace('"', '\\"')
+    column_values = json.dumps({"estado_1_mkkbqk95": {"label": "Finalizado"}}).replace('"', '\\"')
     query = {
         "query": f'''
         mutation {{
             change_column_value(
-                board_id: {MONDAY_BOARD_ID},
+                board_id: {CITAS_BOARD_ID},
                 item_id: {item_id},
                 column_id: "estado_1_mkkbqk95",
-                value: "{{\\"label\\": \\\"Finalizado\\"}}"
+                value: "{column_values}"
             ) {{
                 id
             }}
@@ -253,7 +259,7 @@ def send_notification_to_user(user_id, message):
         mutation {{
             create_notification(
                 user_id: {user_id},
-                target_id: {MONDAY_BOARD_ID},
+                target_id: {CITAS_BOARD_ID},
                 target_type: Project,
                 text: "{message}"
             ) {{
@@ -295,24 +301,17 @@ def webhook_handler():
         print(f"Webhook recibido: Item ID: {item_id}, Board ID: {board_id}, User ID: {user_id}")
 
         # 1) Obtener el valor de Codigo IP desde Monday
-        item_info = get_codip_from_monday(item_id)
-        if not item_info or not item_info["CodIP"]:
-            return jsonify({"error": "No se pudo obtener el CodIP"}), 400
-        
-        CodIP = item_info["CodIP"]
-        NombrePaciente = item_info["NombrePaciente"]
-        NHPaciente = item_info["NHPaciente"]
-        print(f"Se obtuvo...CodIP: {CodIP} ,NombrePaciente: {NombrePaciente} ,NHPaciente:{NHPaciente}")
+        CodIP = get_codip_from_monday(item_id)
+        if not CodIP:
+            return jsonify({"error": "No se pudo obtener el valor de CodIP"}), 400
 
         # 2) Una vez identificado el CodIP se obtienen los datos que necesitan ser enviados hacia Monday.com
         # Consultar citas paciente
-        # citas_paciente = get_citas_paciente(CodIP)
-        citas_paciente = get_citas_paciente(NHPaciente)
+        citas_paciente = get_citas_paciente(CodIP)
         if not citas_paciente:
             return jsonify({"error": "No se obtuvieron citas del paciente"}), 400
         # Consultar muestras paciente
-        # muestras_paciente = get_muestras_paciente(CodIP)
-        muestras_paciente = get_muestras_paciente(NHPaciente)
+        muestras_paciente = get_muestras_paciente(CodIP)
         if not muestras_paciente:
             return jsonify({"error": "No se obtuvieron muestras del paciente"}), 400            
 
@@ -320,13 +319,13 @@ def webhook_handler():
         # Por cada elemento recibido de Citas paciente, se debe validar si existe o no el elemento
         # Si no existe crear el item en el tablero de CitasPaciente
         for item in citas_paciente:
-            create_item_in_monday(item, CodIP, NombrePaciente)
+            create_item_in_monday(item, CodIP)
 
         # 4) Actualizar el estado de la transaccion a Finalizado
         update_item_status(item_id)  # Actualiza el estado del item a "Finalizado"
         
         # 5) Notificar la notificacion de finalizacion de  la transaccion
-        send_notification_to_user(user_id, "Se ha completado la integración para obtener datos del IP: {NombrePaciente}")
+        send_notification_to_user(user_id, "Se ha completado la integración de citas del paciente.")
 
         print(f"Integración completada con exito")
         return jsonify({"message": "Integración completada con éxito"}), 200
