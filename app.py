@@ -326,7 +326,7 @@ def webhook_handler():
         update_item_status(item_id)  # Actualiza el estado del item a "Finalizado"
         
         # 5) Notificar la notificacion de finalizacion de  la transaccion
-        send_notification_to_user(user_id, "Se ha completado la integración para obtener datos del IP: {NombrePaciente}")
+        send_notification_to_user(user_id, f"Se ha completado la integración para obtener datos del IP: {NombrePaciente}")
 
         print(f"Integración completada con exito")
         return jsonify({"message": "Integración completada con éxito"}), 200
