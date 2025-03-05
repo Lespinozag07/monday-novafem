@@ -14,10 +14,11 @@ MONDAY_BOARD_ID = "8079345425";
 #Id del tablero citasPaciente
 CITAS_BOARD_ID = "8078247682";
 #Id del tablero manejo reservas de banco
-RESERVAS_BOARD_ID = "7201635321";
+CRIOBANCO_BOARD_ID = "7201636037";
 NHPaciente = '';
 CodIpPaciente = '';
 NombrePaciente = '';
+NumeroDocumento = '';
 
 #1- metodo para obtener el Codigo Ip desde Monday
 def get_codip_from_monday(item_id): 
@@ -58,7 +59,9 @@ def get_codip_from_monday(item_id):
                 item_info["CodIP"] = column["text"]
             if column["id"] == "texto_mkkbaxzb": 
                 item_info["NHPaciente"] = column["text"]
-                #print(f"El NH es:"+ NHPaciente)              
+                #print(f"El NH es:"+ NHPaciente)
+            if column["id"] == "texto__1": 
+                item_info["NumeroDocumento"] = column["text"]                
         return item_info
     else:
         print(f"Error al consultar Monday: {response.status_code}")
@@ -121,7 +124,7 @@ def get_muestras_paciente(CodIP):
         return None        
 
 #4- validar si existe o no el elemento (devuelve boolean)
-def item_exists_in_monday(item_name):
+def item_exists_in_monday(item_name , board_id):
     print(f"Entrando en item_exists_in_monday")
     # Verifica si un item con el mismo ID de cita ya existe en el tablero (sin límite de 100)
     headers = {
@@ -135,7 +138,7 @@ def item_exists_in_monday(item_name):
         query = {
             "query": f'''
             query {{
-                boards(ids: {CITAS_BOARD_ID}) {{
+                boards(ids: {board_id}) {{
                     items_page(limit: 100, cursor: {json.dumps(cursor) if cursor else "null"}) {{
                         cursor
                         items {{
@@ -161,10 +164,10 @@ def item_exists_in_monday(item_name):
     return any(item["name"] == item_name for item in items)
 
 #5- Si no existe crear el item en el tablero de CitasPaciente
-def create_item_in_monday(item_data, CodIP, NombrePaciente):
-    print(f"Entrando en create_item_in_monday")
+def create_item_cita(item_data, CodIP, NombrePaciente):
+    print(f"Entrando en create_item_cita")
     # Crea un item en Monday.com solo si no existe
-    if item_exists_in_monday(str(item_data.get("id", ""))):
+    if item_exists_in_monday(str(item_data.get("id", "")), {CITAS_BOARD_ID}):
         print(f"El item {item_data.get('id')} ya existe en Monday.com, no se creará nuevamente.")
         return
         
@@ -213,7 +216,62 @@ def create_item_in_monday(item_data, CodIP, NombrePaciente):
         print(f"Error al crear el item en Monday.com: {response.status_code}")
         print(response.text)
         
-#6- actualizar el estado del campo ObtenerDatosVrpro
+#6- Si no existe crear el item en el tablero de CrioBanco
+def create_item_criobanco(item_data, CodIP, NombrePaciente, NumeroDocumento):
+    print(f"Entrando en create_item_criobanco")
+    # Crea un item en Monday.com solo si no existe
+    if item_exists_in_monday(str(item_data.get("id", "")), {CRIOBANCO_BOARD_ID}):
+        print(f"El item {item_data.get('id')} ya existe en CrioBanco Monday.com, no se creará nuevamente.")
+        return
+        
+    headers = {
+        "Authorization": MONDAY_API_KEY,
+        "Content-Type": "application/json"
+    }
+
+    column_values = {
+        #"": str(item_data.get("id", "")),#ID - No hay columna Id en este tablero
+        #"": item_data.get("historias", ""),#historias
+        #"": item_data.get("eda_his", ""),#eda_his
+        "date_mknr2s60": item_data.get("fec_entra", "").split("T")[0],#fec_entra --> Fecha Entrada
+        #"": item_data.get("hor_ent", ""),#hor_ent
+        "date_mknravmw": item_data.get("fec_salida", "").split("T")[0],#fec_salida --> Fecha Salida
+        "text_mknrqbv4": item_data.get("destino.name", ""),#destino.name
+        "text_mknrwgre": item_data.get("destino", ""),#destino
+        "n_meros__1": item_data.get("numero_embrion", 0),#numero_embrion --> Cantidad total de Óvulos
+        "text_mknrm2kr": item_data.get("emb_dia", ""),#emb_dia
+        "text_mknr956h": item_data.get("emb_dia.name", ""),#emb_dia.name
+        #"": item_data.get("tp", ""),#tp
+        "color_mknr3xrk": item_data.get("tp.name", ""),#tp.name --> Tipo Gameto
+        "reflejo_1__1": NumeroDocumento,#Número de documento
+        "dup__of_apellidos__1": NombrePaciente #Ip
+    }
+
+    columnValues = json.dumps(column_values).replace('"', '\\"')
+    
+    #Mutacion para realizar la operacion de creacion de items en el tablero especificad
+    query = {
+        "query": f'''
+        mutation {{
+            create_item(
+                board_id: {CRIOBANCO_BOARD_ID},
+                item_name: "{item_data["id"]}",
+                column_values: "{columnValues}"
+            ) {{
+                id
+            }}
+        }}
+        '''
+    }
+
+    response = requests.post(MONDAY_URL, headers=headers, json=query)
+    if response.status_code == 200:
+        print(f"Item criobanco creado en Monday.com: {response.json()}")
+    else:
+        print(f"Error al crear el item criobanco en Monday.com: {response.status_code}")
+        print(response.text)
+    
+#7- actualizar el estado del campo ObtenerDatosVrpro
 def update_item_status(item_id):
     # Actualiza la columna 'estado_1_mkkbqk95' a "Finalizado"
     headers = {
@@ -241,7 +299,7 @@ def update_item_status(item_id):
     else:
         print(f"Error al actualizar el estado del item: {response.status_code}")
 
-#7- notificarle al usuario la finalizacion de la integracion
+#8- notificarle al usuario la finalizacion de la integracion
 def send_notification_to_user(user_id, message):
     # Envía una notificación a un usuario en Monday.com
     headers = {
@@ -302,7 +360,8 @@ def webhook_handler():
         CodIP = item_info["CodIP"]
         NombrePaciente = item_info["NombrePaciente"]
         NHPaciente = item_info["NHPaciente"]
-        print(f"Se obtuvo...CodIP: {CodIP} ,NombrePaciente: {NombrePaciente} ,NHPaciente:{NHPaciente}")
+        NumeroDocumento = item_info["NumeroDocumento"]
+        print(f"Se obtuvo...CodIP: {CodIP} ,NombrePaciente: {NombrePaciente} ,NHPaciente:{NHPaciente} , NumeroDocumento {NumeroDocumento}")
 
         # 2) Una vez identificado el CodIP se obtienen los datos que necesitan ser enviados hacia Monday.com
         # Consultar citas paciente
@@ -320,7 +379,12 @@ def webhook_handler():
         # Por cada elemento recibido de Citas paciente, se debe validar si existe o no el elemento
         # Si no existe crear el item en el tablero de CitasPaciente
         for item in citas_paciente:
-            create_item_in_monday(item, CodIP, NombrePaciente)
+            create_item_cita(item, CodIP, NombrePaciente)
+
+        # Por cada elemento recibido de Muestras paciente, se debe validar si existe o no el elemento
+        # Si no existe crear el item en el tablero de CrioBanco
+        for item in muestras_paciente:
+            create_item_criobanco(item, CodIP, NombrePaciente, NumeroDocumento)
 
         # 4) Actualizar el estado de la transaccion a Finalizado
         update_item_status(item_id)  # Actualiza el estado del item a "Finalizado"
