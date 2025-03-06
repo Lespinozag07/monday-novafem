@@ -9,8 +9,8 @@ app = Flask(__name__)
 MONDAY_API_KEY = "eyJhbGciOiJIUzI1NiJ9.eyJ0aWQiOjQzNTUzODI2NCwiYWFpIjoxMSwidWlkIjo1NTA0OTQ4NywiaWFkIjoiMjAyNC0xMS0xMlQxMzo0NzoyNS4wMDBaIiwicGVyIjoibWU6d3JpdGUiLCJhY3RpZCI6MjA5ODM5NTMsInJnbiI6InVzZTEifQ.R0agHiyUGpEhWbCFvEWt7w_5yCsMZVYu0mi8YAHqHag"
 MONDAY_URL = "https://api.monday.com/v2"
 EXTERNAL_API_URL = "https://test-apiwarden.portalns.es/api/monday/citasPaciente"
-#Id del tablero IPs-test
-MONDAY_BOARD_ID = "8079345425";
+#Id del tablero IP (IPs-test='8079345425') (IPs Pre-approval='6575767453')
+MONDAY_BOARD_ID = "6575767453";
 #Id del tablero citasPaciente
 CITAS_BOARD_ID = "8078247682";
 #Id del tablero manejo reservas de banco
@@ -53,16 +53,26 @@ def get_codip_from_monday(item_id):
             "CodIP": None,
             "NombrePaciente": item_data["name"]  # Obtener el valor del Name del item
         }
-
+        #(MAPEO EN IPs Pre-approval)
         for column in item_data["column_values"]:
             if column["id"] == "codigo_ip__1": 
                 item_info["CodIP"] = column["text"]
-            if column["id"] == "texto_mkkbaxzb": 
+            if column["id"] == "nh":#Esta columna no existe en este tablero 
                 item_info["NHPaciente"] = column["text"]
                 #print(f"El NH es:"+ NHPaciente)
             if column["id"] == "texto__1": 
                 item_info["NumeroDocumento"] = column["text"]                
-        return item_info
+        return item_info           
+        #(MAPEO EN IPs-test)
+        #for column in item_data["column_values"]:
+            #if column["id"] == "codigo_ip__1": 
+                #item_info["CodIP"] = column["text"]
+            #if column["id"] == "texto_mkkbaxzb": 
+                #item_info["NHPaciente"] = column["text"]
+                #print(f"El NH es:"+ NHPaciente)
+            #if column["id"] == "texto__1": 
+                #item_info["NumeroDocumento"] = column["text"]                
+        #return item_info 
     else:
         print(f"Error al consultar Monday: {response.status_code}")
         return None
@@ -124,8 +134,8 @@ def get_muestras_paciente(CodIP):
         return None        
 
 #4- validar si existe o no el elemento (devuelve boolean)
-def item_exists_in_monday(item_name , board_id):
-    print(f"Entrando en item_exists_in_monday")
+def cita_exists_in_monday(item_name):    
+    print(f"Validando si Cita existe--> item_name:{item_name}")
     # Verifica si un item con el mismo ID de cita ya existe en el tablero (sin límite de 100)
     headers = {
         "Authorization": MONDAY_API_KEY,
@@ -138,7 +148,46 @@ def item_exists_in_monday(item_name , board_id):
         query = {
             "query": f'''
             query {{
-                boards(ids: {board_id}) {{
+                boards(ids: {CITAS_BOARD_ID}) {{
+                    items_page(limit: 100, cursor: {json.dumps(cursor) if cursor else "null"}) {{
+                        cursor
+                        items {{
+                            id
+                            name
+                        }}
+                    }}
+                }}
+            }}
+            '''
+        }
+        response = requests.post(MONDAY_URL, headers=headers, json=query)
+        
+        if response.status_code == 200:
+            data = response.json()
+            items.extend(data["data"]["boards"][0]["items_page"]["items"])
+            cursor = data["data"]["boards"][0]["items_page"].get("cursor")
+            if not cursor:
+                break  # No hay más páginas, terminamos
+        else:
+            return False  # Error en la consulta, asumimos que no existe
+    
+    return any(item["name"] == item_name for item in items)
+
+def muestra_exists_in_monday(item_name):    
+    print(f"Validando si Muestra existe--> item_name:{item_name}")
+    # Verifica si un item con el mismo ID de cita ya existe en el tablero (sin límite de 100)
+    headers = {
+        "Authorization": MONDAY_API_KEY,
+        "Content-Type": "application/json"
+    }
+    items = []
+    cursor = None
+    
+    while True:
+        query = {
+            "query": f'''
+            query {{
+                boards(ids: {CRIOBANCO_BOARD_ID}) {{
                     items_page(limit: 100, cursor: {json.dumps(cursor) if cursor else "null"}) {{
                         cursor
                         items {{
@@ -167,7 +216,7 @@ def item_exists_in_monday(item_name , board_id):
 def create_item_cita(item_data, CodIP, NombrePaciente):
     print(f"Entrando en create_item_cita")
     # Crea un item en Monday.com solo si no existe
-    if item_exists_in_monday(str(item_data.get("id", "")), {CITAS_BOARD_ID}):
+    if cita_exists_in_monday(str(item_data.get("id", ""))):
         print(f"El item {item_data.get('id')} ya existe en Monday.com, no se creará nuevamente.")
         return
         
@@ -220,8 +269,8 @@ def create_item_cita(item_data, CodIP, NombrePaciente):
 def create_item_criobanco(item_data, CodIP, NombrePaciente, NumeroDocumento):
     print(f"Entrando en create_item_criobanco")
     # Crea un item en Monday.com solo si no existe
-    if item_exists_in_monday(str(item_data.get("id", "")), {CRIOBANCO_BOARD_ID}):
-        print(f"El item {item_data.get('id')} ya existe en CrioBanco Monday.com, no se creará nuevamente.")
+    if muestra_exists_in_monday(str(item_data.get("id", ""))):
+        print(f"El item {item_data.get('id')} ya existe en CrioBanco, no se creará nuevamente.")
         return
         
     headers = {
@@ -243,8 +292,8 @@ def create_item_criobanco(item_data, CodIP, NombrePaciente, NumeroDocumento):
         "text_mknr956h": item_data.get("emb_dia.name", ""),#emb_dia.name
         #"": item_data.get("tp", ""),#tp
         "color_mknr3xrk": item_data.get("tp.name", ""),#tp.name --> Tipo Gameto
-        "reflejo_1__1": NumeroDocumento,#Número de documento
-        "dup__of_apellidos__1": NombrePaciente #Ip
+        "numeric_mkns66z3": NumeroDocumento,#Número de documento 
+        "text_mkns6kpb": NombrePaciente #Ip
     }
 
     columnValues = json.dumps(column_values).replace('"', '\\"')
@@ -346,8 +395,10 @@ def webhook_handler():
         item_id = data.get("event", {}).get("pulseId")  # ID del elemento
         board_id = data.get("event", {}).get("boardId")  # ID del tablero
         user_id = data.get("event", {}).get("userId")
+        mensaje = ""
 
         if not item_id or not board_id or not user_id:
+            mensaje = "ERROR: No se proporcionaron IDs válidos"
             return jsonify({"error": "No se proporcionaron IDs válidos"}), 400
 
         print(f"Webhook recibido: Item ID: {item_id}, Board ID: {board_id}, User ID: {user_id}")
@@ -355,6 +406,7 @@ def webhook_handler():
         # 1) Obtener el valor de Codigo IP desde Monday
         item_info = get_codip_from_monday(item_id)
         if not item_info or not item_info["CodIP"]:
+            mensaje = "ERROR: No se pudo obtener el CodIP"
             return jsonify({"error": "No se pudo obtener el CodIP"}), 400
         
         CodIP = item_info["CodIP"]
@@ -362,17 +414,19 @@ def webhook_handler():
         NHPaciente = item_info["NHPaciente"]
         NumeroDocumento = item_info["NumeroDocumento"]
         print(f"Se obtuvo...CodIP: {CodIP} ,NombrePaciente: {NombrePaciente} ,NHPaciente:{NHPaciente} , NumeroDocumento {NumeroDocumento}")
-
+        mensaje = f"Completado con éxito, se han obtenido los datos para IP : {NombrePaciente}"
         # 2) Una vez identificado el CodIP se obtienen los datos que necesitan ser enviados hacia Monday.com
         # Consultar citas paciente
-        # citas_paciente = get_citas_paciente(CodIP)
-        citas_paciente = get_citas_paciente(NHPaciente)
+        # citas_paciente = get_citas_paciente(NHPaciente)
+        citas_paciente = get_citas_paciente(CodIP)
         if not citas_paciente:
+            mensaje = f"ERROR: No se obtuvieron citas para IP : {NombrePaciente}"
             return jsonify({"error": "No se obtuvieron citas del paciente"}), 400
         # Consultar muestras paciente
-        # muestras_paciente = get_muestras_paciente(CodIP)
-        muestras_paciente = get_muestras_paciente(NHPaciente)
+        # muestras_paciente = get_muestras_paciente(NHPaciente)
+        muestras_paciente = get_muestras_paciente(CodIP)
         if not muestras_paciente:
+            mensaje = "ERROR: No se obtuvieron muestras de banco para IP : {NombrePaciente}"
             return jsonify({"error": "No se obtuvieron muestras del paciente"}), 400            
 
         # 3) Una vez obtenido los datos desde el API o BD
@@ -390,7 +444,7 @@ def webhook_handler():
         update_item_status(item_id)  # Actualiza el estado del item a "Finalizado"
         
         # 5) Notificar la notificacion de finalizacion de  la transaccion
-        send_notification_to_user(user_id, f"Se ha completado la integración para obtener datos del IP: {NombrePaciente}")
+        send_notification_to_user(user_id, f"Integración VRPRO: {mensaje}")
 
         print(f"Integración completada con exito")
         return jsonify({"message": "Integración completada con éxito"}), 200
