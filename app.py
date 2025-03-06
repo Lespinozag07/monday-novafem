@@ -411,7 +411,7 @@ def webhook_handler():
         
         CodIP = item_info["CodIP"]
         NombrePaciente = item_info["NombrePaciente"]
-        NHPaciente = item_info["NHPaciente"]
+        #NHPaciente = item_info["NHPaciente"]
         NumeroDocumento = item_info["NumeroDocumento"]
         print(f"Se obtuvo...CodIP: {CodIP} ,NombrePaciente: {NombrePaciente} ,NHPaciente:{NHPaciente} , NumeroDocumento {NumeroDocumento}")
         mensaje = f"Completado con éxito, se han obtenido los datos para IP : {NombrePaciente}"
