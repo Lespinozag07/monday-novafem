@@ -236,6 +236,7 @@ def create_item_cita(item_data, CodIP, NombrePaciente):
         "texto_mkkbd68h": item_data.get("hora", ""),#hora_cita
         "texto_mkkbhz9d": item_data.get("estados_citas", ""),#estados_citas
         "texto_mkkbqmst": item_data.get("estados_citas.name", ""),#estados_citas.name
+        "text_mkntb8xy": item_data.get("historias.tlf1", ""),#Teléfono
         "texto_mkkbc2cz": CodIP,
         "texto_mkkbsc4y": NombrePaciente
     }
