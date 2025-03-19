@@ -335,7 +335,7 @@ def update_item_status(item_id):
             change_column_value(
                 board_id: {MONDAY_BOARD_ID},
                 item_id: {item_id},
-                column_id: "estado_1_mkkbqk95",
+                column_id: "color_mkp62q25",
                 value: "{{\\"label\\": \\\"Finalizado\\"}}"
             ) {{
                 id
